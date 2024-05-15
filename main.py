@@ -1,15 +1,15 @@
-from typing import Annotated
-from fastapi import Depends, FastAPI,Path,Query,HTTPException
-from database import sessionLocal,engine
-from sqlalchemy.orm import Session
+
+from fastapi import FastAPI
+from database import engine
 import models
-from pydantic import BaseModel,Field
-from starlette import status
-from models import Todos
-from router.todos import router
+from router import todos
+from router import users
 
 app = FastAPI()
-app.include_router(router)
+
+app.include_router(users.router)
+app.include_router(todos.router)
+
 
 models.base.metadata.create_all(bind = engine)
 

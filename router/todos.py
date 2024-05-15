@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel,Field
 from starlette import status
 from models import Todos
+from .users import get_current_user
 
 router = APIRouter()
 
@@ -27,14 +28,18 @@ def get_db():
        db.close
        
 db_dependency = Annotated[Session,Depends(get_db)]
+user_dependency = Annotated[dict,Depends(get_current_user)]
         
 @router.get("/todos")
-async def get_all_todos(db:db_dependency):
-    return db.query(Todos).all()
+async def get_all_todos(user:user_dependency,db:db_dependency):
+    return db.query(Todos).filter(Todos.owner_id == user.get('id') ).all()
 
 @router.get("/todos/{todo_id}")
-async def individual_id(db:db_dependency,todo_id:int = Path(gt=0)):
-    single_todo = db.query(Todos).filter(Todos.id == todo_id).first()
+async def individual_id(user:user_dependency,db:db_dependency,todo_id:int = Path(gt=0)):
+    if user is None:
+        raise HTTPException(status_code=401,detail='Authentication failed')
+        
+    single_todo = db.query(Todos).filter(Todos.id == todo_id).filter(Todos.owner_id == user.get('id')).first()
     if single_todo is not None:
         return single_todo
     raise HTTPException(status_code=404,detail='Id Not Found')
@@ -54,16 +59,24 @@ async def get_todos_depends_on_priority_and_complete(db:db_dependency,complete:i
     raise HTTPException(status_code=404,detail='Not Found')
 
     
-
+#Post Route
 @router.post("/todos/create_todos",status_code=status.HTTP_201_CREATED)
-async def get_todos(db:db_dependency,todo_request:TodoRequest):
-    new_todo = Todos(**todo_request.model_dump())
+async def get_todos(user:user_dependency,db:db_dependency,todo_request:TodoRequest):
+    if user is None:
+        raise HTTPException(status_code=404,detail='Authentication Failed')
+    new_todo = Todos(**todo_request.model_dump(),owner_id = user.get('id') )
     db.add(new_todo)
     db.commit()
     
+
+#update Route    
 @router.put("/todos/{todo_id}")
-async def update_todo(db:db_dependency,todo_request:TodoRequest,todo_id:int=Path(gt=0)):
-    get_todo = db.query(Todos).filter(Todos.id == todo_id).first()
+async def update_todo(user:user_dependency,db:db_dependency,
+                      todo_request:TodoRequest,todo_id:int=Path(gt=0)):
+    if user is None:
+        raise HTTPException(status_code=401,detail='UnAuthenticate User')
+    
+    get_todo = db.query(Todos).filter(Todos.id == todo_id).filter(Todos.owner_id == user.get('id')).first()
     if get_todo is None:
         raise HTTPException(status_code=404,detail='id not found')
     get_todo.title = todo_request.title
@@ -74,11 +87,16 @@ async def update_todo(db:db_dependency,todo_request:TodoRequest,todo_id:int=Path
     db.add(get_todo)
     db.commit()
     
+    
+#Delete Route   
 @router.delete("/todos/{todo_id}")
-async def todo_delete(db:db_dependency,todo_id:int = Path(gt=0)):
-    get_todo = db.query(Todos).filter(Todos.id == todo_id).first()
+async def todo_delete(user:user_dependency,db:db_dependency,todo_id:int = Path(gt=0)):
+    if user is None:
+        raise HTTPException(status_code=401,detail='UnAuthenticate User')
+ 
+    get_todo = db.query(Todos).filter(Todos.id == todo_id).filter(Todos.owner_id == user.get('id')).first()
     if get_todo is None:
         raise HTTPException(status_code=404,detail='id not found')
-    db.query(Todos).filter(Todos.id == todo_id).delete()
+    db.query(Todos).filter(Todos.id == todo_id).filter(Todos.owner_id == user.get('id')).delete()
     db.commit()
     

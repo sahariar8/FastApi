@@ -9,6 +9,9 @@ uvicorn = {extras = ["standard"], version = "*"}
 sqlalchemy = "*"
 pydentic = "*"
 pydantic = "*"
+passlib = "*"
+bcrypt = "*"
+python-jose = {extras = ["cryptography"], version = "*"}
 
 [dev-packages]
 
